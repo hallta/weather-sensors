@@ -54,12 +54,17 @@ class DS18B20(object):
 
 i = 0
 interval = 30
-interval = 1
+#interval = 5
 bus = SMBus(1)
 bme280 = BME280(i2c_dev=bus)
 ds18b = DS18B20()
 wind = Button(5)
 wind_count = 0
+rain = Button(6)
+rain_count = 0
+
+RAIN_PER_BUCKET=0.2794 # mm
+MM_TO_INCH=25.4
 
 ## Functions
 
@@ -86,26 +91,36 @@ def speed_cmh(i):
     rot = wind_count / 2
     dist = cir * rot
     cmh = dist / i
+
     return cmh
-
-
-def speed_mph(i):
-    return speed_cmh(i) / 160900
 
 
 def spin():
     global wind_count
     wind_count = wind_count + 1
 
-wind.when_pressed = spin
 
+def rain_catch():
+    global rain_count
+    rain_count = rain_count + 1
+
+
+def get_rainfall():
+    total_fallen = rain_count * RAIN_PER_BUCKET
+    return total_fallen
+
+
+wind.when_pressed = spin
+rain.when_pressed = rain_catch
 while True:
     temperature = bme280.get_temperature()
     pressure = bme280.get_pressure()
     humidity = bme280.get_humidity()
     soiltemp = ds18b.read_temp()
-    wind_cmh = round(speed_cmh(interval),2)
-    wind_mph = round(speed_mph(interval),2)
+    wind_cmh = round(speed_cmh(interval), 2)
+    wind_mph = round((wind_cmh / 160900), 2)
+    rain_mm  = get_rainfall()
+    rain_in  = round(rain_mm / 25.4, 2)
 
     state = 'init' if (i == 0) else 'post-init'
 
@@ -115,12 +130,21 @@ while True:
     put(int(time.time()), 'soil_temp', state, soiltemp, '{}')
     put(int(time.time()), 'wind_cmh', state, wind_cmh, '{}')
     put(int(time.time()), 'wind_mph', state, wind_mph, '{}')
+    put(int(time.time()), 'rain_mm', state, rain_mm, '{}')
+    put(int(time.time()), 'rain_in', state, rain_in, '{}')
 
     print(f"{temperature:05.2f}°C, " +
         f"{pressure:05.2f}hPa, " +
         f"{humidity:05.2f}%, " +
         f"{soiltemp:05.2f}°C " +
         f"{wind_cmh:05.2f}cm/h " +
-        f"{wind_mph:05.2f}mp/h")
-    i = i + 1
+        f"{wind_mph:05.2f}mp/h " +
+        f"{rain_mm:05.2f}mm " +
+        f"{rain_in:05.2f}in"
+        )
+
     time.sleep(interval)
+
+    i = i + 1
+    wind_count = 0
+    rain_count = 0
